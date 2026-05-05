@@ -3,8 +3,9 @@ from dotenv import load_dotenv
 import sqlite3
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
-from classifier import classify_oferta
+from job_agent.classifier import classify_oferta
 from anthropic import Anthropic
+from job_agent.classifier import classify_oferta
 
 load_dotenv()
 
