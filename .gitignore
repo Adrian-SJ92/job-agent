@@ -6,3 +6,4 @@ __pycache__/
 ofertas.db
 *.log
 .vscode/
+CLAUDE.md
