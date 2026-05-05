@@ -3,7 +3,7 @@ import sqlite3
 from datetime import datetime
 from dotenv import load_dotenv
 import os
-from classifier import classify_oferta
+from job_agent.classifier import classify_oferta
 
 load_dotenv()
 
