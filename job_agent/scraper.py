@@ -1,32 +1,8 @@
-import feedparser
 import argparse
-from datetime import datetime
+from job_agent.scrapers.infojobs import fetch_infojobs
 from job_agent.classifier import classify_oferta
 from job_agent.config.config_manager import load_user_config
 from job_agent.db.schema import init_db, get_user_by_username, save_oferta
-
-
-def build_rss_url(user_config):
-    keywords = user_config.get('RSS_KEYWORDS', 'react')
-    city = user_config.get('RSS_CITY', 'malaga')
-    experience = user_config.get('RSS_EXPERIENCE', 'junior')
-    return f"https://www.infojobs.net/rss/search?q={keywords}&city={city}&experience={experience}"
-
-
-def fetch_infojobs(rss_url):
-    feed = feedparser.parse(rss_url)
-    ofertas = []
-    for entry in feed.entries:
-        oferta = {
-            'id': entry.get('id', ''),
-            'titulo': entry.get('title', ''),
-            'empresa': entry.get('author', 'Desconocida'),
-            'url': entry.get('link', ''),
-            'descripcion': entry.get('summary', ''),
-            'fuente': 'infojobs'
-        }
-        ofertas.append(oferta)
-    return ofertas
 
 
 def main():
@@ -46,10 +22,9 @@ def main():
         return
 
     user_id = user['id']
-    rss_url = build_rss_url(user_config)
 
     print(f"[*] Capturando ofertas de InfoJobs...")
-    ofertas = fetch_infojobs(rss_url)
+    ofertas = fetch_infojobs(user_config)
     print(f"[*] {len(ofertas)} ofertas encontradas")
 
     buenas = 0
