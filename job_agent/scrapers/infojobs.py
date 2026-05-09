@@ -33,6 +33,8 @@ def _normalize(text: str) -> str:
 
 def _get_driver(user_config: Dict) -> webdriver.Chrome:
     import platform
+    from webdriver_manager.chrome import ChromeDriverManager
+
     opts = Options()
     opts.add_argument('--headless')
     opts.add_argument('--no-sandbox')
@@ -43,10 +45,11 @@ def _get_driver(user_config: Dict) -> webdriver.Chrome:
     chrome_bin = user_config.get('CHROME_BINARY', '')
     chromedriver_bin = user_config.get('CHROMEDRIVER_BINARY', '')
 
-    # En ARM (Raspberry Pi) Selenium Manager no funciona — usar binarios del sistema
+    # En ARM (Raspberry Pi) Selenium Manager no soporta aarch64
     if platform.machine() == 'aarch64':
         chrome_bin = chrome_bin or '/usr/bin/chromium'
-        chromedriver_bin = chromedriver_bin or '/home/pi/.wdm/drivers/chromedriver/linux64/114.0.5735.90/chromedriver'
+        if not chromedriver_bin:
+            chromedriver_bin = ChromeDriverManager().install()
 
     if chrome_bin:
         opts.binary_location = chrome_bin
