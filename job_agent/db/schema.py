@@ -1,5 +1,7 @@
 import sqlite3
 from datetime import datetime
+from pathlib import Path
+import hashlib
 
 DB_PATH = "ofertas.db"
 
