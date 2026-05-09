@@ -45,8 +45,8 @@ def _get_driver(user_config: Dict) -> webdriver.Chrome:
 
     # En ARM (Raspberry Pi) Selenium Manager no funciona — usar binarios del sistema
     if platform.machine() == 'aarch64':
-        chrome_bin = chrome_bin or '/usr/bin/chromium-browser'
-        chromedriver_bin = chromedriver_bin or '/usr/bin/chromedriver'
+        chrome_bin = chrome_bin or '/usr/bin/chromium'
+        chromedriver_bin = chromedriver_bin or '/home/pi/.wdm/drivers/chromedriver/linux64/114.0.5735.90/chromedriver'
 
     if chrome_bin:
         opts.binary_location = chrome_bin
