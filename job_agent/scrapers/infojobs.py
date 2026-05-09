@@ -1,5 +1,6 @@
 import feedparser
 import hashlib
+import unicodedata
 from typing import List, Dict
 
 def build_infojobs_url(user_config: Dict) -> str:
@@ -22,7 +23,7 @@ def build_infojobs_url(user_config: Dict) -> str:
     keyword = stack_keywords.get(stack_list[0], stack_list[0].lower())
     
     # Limpiar ubicación: solo la primera palabra
-    ciudad = ubicacion.split(',')[0].split()[0].lower()
+    ciudad = unicodedata.normalize('NFKD', ubicacion.split(',')[0].split()[0]).encode('ASCII', 'ignore').decode('ASCII').lower()
     
     # Construir URL
     url = f"https://www.infojobs.net/rss/search?q={keyword}&city={ciudad}&experience=junior"
