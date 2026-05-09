@@ -16,9 +16,18 @@ url = 'https://www.infojobs.net/jobsearch/search-results/list.xhtml?keyword=Reac
 r = session.get(url, timeout=15)
 soup = BeautifulSoup(r.text, 'html.parser')
 
-cards = soup.find_all('li', class_='ij-OfferList-offerCardItem')
-print(f"Cards encontradas: {len(cards)}")
+# Buscar cualquier elemento que contenga título de oferta
+print("=== Buscando 'oferta' en clases de elementos ===")
+for tag in soup.find_all(True):
+    cls = ' '.join(tag.get('class', []))
+    if 'offer' in cls.lower() or 'ofert' in cls.lower() or 'job' in cls.lower():
+        txt = tag.get_text(strip=True)[:80]
+        print(f"  <{tag.name} class='{cls}'> {txt}")
 
-if cards:
-    print("\n--- HTML PRIMERA CARD ---")
-    print(cards[0].prettify()[:3000])
+print("\n=== Buscando <article> o <section> con contenido de oferta ===")
+for tag in soup.find_all(['article', 'section', 'div']):
+    cls = ' '.join(tag.get('class', []))
+    if any(x in cls for x in ['card', 'Card', 'result', 'Result', 'item', 'Item']):
+        txt = tag.get_text(strip=True)[:100]
+        if txt:
+            print(f"  <{tag.name} class='{cls}'> {txt[:80]}")
