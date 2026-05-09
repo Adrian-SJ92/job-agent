@@ -1,4 +1,4 @@
-import argparse
+﻿import argparse
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     Application, CommandHandler, CallbackQueryHandler,
@@ -36,10 +36,21 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("Ayuda", callback_data="help")],
     ]
     await update.message.reply_text(
-        f"*Job Agent* — Hola {user['username']}\n\n"
-        "/pendientes - Ofertas sin decision\n"
-        "/stats - Estadisticas\n"
-        "/setup - Reconfigurar cuenta",
+        "🤖 *Job Agent* — Tu co-piloto en la búsqueda de empleo\n\n"
+        f"¡Hola {user['username']}! 👋\n\n"
+        "Soy tu asistente de IA para encontrar trabajo. Analizo ofertas, genero CVs personalizados y te ayudo a estar un paso adelante.\n\n"
+        "⚡ *Lo que puedo hacer:*\n"
+        "🔍 Filtrar ofertas automáticamente (score, sueldo, stack, ubicación)\n"
+        "📄 Generar CV adaptado a cada oferta\n"
+        "✍️ Redactar cartas de presentación personalizadas\n"
+        "📊 Estadísticas de tu búsqueda\n"
+        "🎯 Prepararte para entrevistas\n"
+        "💾 Trackear tus candidaturas\n\n"
+        "🎬 *Empecemos:*\n"
+        "→ /help — Ver todos los comandos\n"
+        "→ /pendientes — Ver ofertas disponibles\n"
+        "→ /stats — Tus estadísticas\n\n"
+        "🎯 Tu siguiente oportunidad está más cerca de lo que crees. ¡Vamos a por ella!",
         reply_markup=InlineKeyboardMarkup(keyboard),
         parse_mode="Markdown"
     )
