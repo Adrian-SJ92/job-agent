@@ -21,8 +21,9 @@ Job Agent es un asistente personal de búsqueda de empleo que trabaja por ti de 
 
 - 🔍 **Escanea** ofertas de InfoJobs continuamente vía RSS
 - 🧠 **Filtra y puntúa** cada oferta según tus criterios personales (stack, salario, ubicación)
+- 👥 **Multi-usuario** — cada persona tiene su propia configuración, criterios y datos aislados
 - 💾 **Almacena** las mejores oportunidades en una base de datos local
-- 📱 **Te notifica** y permite interactuar con las ofertas desde Telegram
+- 📱 **Interfaz Telegram** para revisar ofertas, ver estadísticas y gestionar candidaturas
 - 📄 **Genera** CVs y cartas de presentación personalizadas *(próximamente)*
 
 ---
@@ -32,35 +33,36 @@ Job Agent es un asistente personal de búsqueda de empleo que trabaja por ti de 
 ```
 ┌─────────────┐     ┌──────────────┐     ┌──────────────┐     ┌──────────────┐
 │  InfoJobs   │────▶│  scraper.py  │────▶│classifier.py │────▶│  ofertas.db  │
-│  RSS Feed   │     │  (fetching)  │     │  (scoring)   │     │  (SQLite)    │
+│  RSS Feed   │     │  --user foo  │     │  (scoring)   │     │  (SQLite)    │
 └─────────────┘     └──────────────┘     └──────────────┘     └──────┬───────┘
                                                                        │
-                                                                       ▼
-                                                              ┌──────────────────┐
-                                                              │  telegram_bot.py │
-                                                              │  (interfaz user) │
-                                                              └──────────────────┘
+                          ┌────────────────────┐                       ▼
+                          │ config/users.json  │──────▶   ┌──────────────────┐
+                          │ config/foo.env     │           │  telegram_bot.py │
+                          └────────────────────┘           │  --user foo      │
+                                                           └──────────────────┘
 ```
 
 | Módulo | Descripción |
 |--------|-------------|
-| `scraper.py` | Obtiene ofertas de InfoJobs vía RSS con `feedparser` y orquesta el pipeline completo |
-| `classifier.py` | Puntúa cada oferta del 0 al 10 según tus criterios configurables |
-| `telegram_bot.py` | Bot asíncrono con teclado inline para revisar, gestionar y actuar sobre las ofertas |
+| `scraper.py` | Obtiene ofertas de InfoJobs vía RSS y las clasifica para un usuario concreto (`--user`) |
+| `classifier.py` | Puntúa cada oferta del 0 al 10 usando los criterios del usuario (sueldo, stack, ubicación) |
+| `telegram_bot.py` | Bot asíncrono con teclado inline, registro de usuarios y gestión de ofertas |
+| `db/schema.py` | Capa de acceso a datos: tablas `users`, `ofertas`, `criterios` y `stats` |
+| `config/config_manager.py` | Carga la configuración por usuario desde `config/users.json` y su `.env` |
 
 ---
 
 ## 📱 Bot de Telegram
 
-El bot expone los siguientes comandos:
-
 | Comando | Descripción |
 |---------|-------------|
-| `/start` | Menú principal con accesos rápidos |
-| `/pendientes` | Lista las ofertas sin decisión |
-| `/stats` | Estadísticas: total vistas, aplicadas, score medio |
-| `/cv [id]` | Genera un CV adaptado a esa oferta concreta |
-| `/carta [id]` | Redacta una carta de presentación personalizada |
+| `/start` | Menú principal (requiere estar registrado) |
+| `/setup` | Asistente de registro: nombre, sueldo mínimo, stack, ubicación y email |
+| `/pendientes` | Lista las 5 mejores ofertas pendientes de decisión |
+| `/stats` | Estadísticas personales: ofertas vistas y candidaturas enviadas |
+| `/cv [id]` | Genera un CV adaptado a esa oferta *(próximamente)* |
+| `/carta [id]` | Redacta una carta de presentación personalizada *(próximamente)* |
 
 ---
 
@@ -77,76 +79,106 @@ source venv/bin/activate        # Windows: venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-### 2. Configurar credenciales
+### 2. Configurar usuarios
 
-```bash
-cp .env.example .env
+Crea el fichero `config/users.json` con tus usuarios:
+
+```json
+{
+  "users": [
+    {
+      "username": "foo",
+      "chat_id": 123456789,
+      "telegram_token": "TU_BOT_TOKEN",
+      "config_file": "foo.env"
+    }
+  ]
+}
 ```
 
-Edita `.env` con tus credenciales:
+Crea `config/foo.env` con las credenciales y criterios del usuario:
 
 ```env
-TELEGRAM_BOT_TOKEN=tu_token_aqui
-TELEGRAM_CHAT_ID=tu_chat_id_aqui
 ANTHROPIC_API_KEY=tu_api_key_aqui
 GMAIL_USER=tu_email@gmail.com
 GMAIL_PASSWORD=tu_app_password
+
+# Criterios de búsqueda (opcionales, tienen valores por defecto)
+SUELDO_MIN=20000
+STACK=React, Node.js, TypeScript
+UBICACION=Malaga, remoto o hibrido en España
+RSS_KEYWORDS=react
+RSS_CITY=malaga
+RSS_EXPERIENCE=junior
 ```
 
-> **¿Cómo conseguir el token de Telegram?** Habla con [@BotFather](https://t.me/BotFather) en Telegram y crea un bot nuevo.
+> `config/users.json` y los ficheros `.env` están en `.gitignore` — tus credenciales nunca se subirán al repo.
 
-### 3. Ejecutar
+### 3. Registrar el usuario en el bot
+
+Arranca el bot y ejecuta `/setup` desde Telegram para crear tu cuenta en la base de datos:
 
 ```bash
-# Lanzar el scraper (busca, clasifica y guarda ofertas)
-python -m job_agent.scraper
+python -m job_agent.telegram_bot --user foo
+```
 
-# Lanzar el bot de Telegram (interfaz interactiva)
-python -m job_agent.telegram_bot
+### 4. Lanzar el scraper
+
+```bash
+python -m job_agent.scraper --user foo
 ```
 
 ---
 
-## ⚙️ Personalización
+## ⚙️ Personalización de criterios
 
-### Criterios de clasificación
+Los criterios de filtrado se configuran por usuario en su fichero `.env`. No hace falta tocar el código.
 
-Edita `job_agent/classifier.py` para ajustar qué considera una buena oferta:
-
-```python
-# Criterios actuales (classifier.py:11-16)
-- Sueldo mínimo: 20.000 € anuales
-- Rol: Frontend Junior (flexible en stack)
-- Ubicación: Málaga, remoto o híbrido en España
-- Stack preferido: React, Node.js, JavaScript, Python
-- Empresa: Startup/Scale-up (evitar consultoras grandes)
-```
-
-### Búsqueda en InfoJobs
-
-Modifica la URL RSS en `job_agent/scraper.py:10` para cambiar los términos de búsqueda:
-
-```python
-INFOJOBS_RSS = "https://www.infojobs.net/rss/search?q=react&city=malaga&experience=junior"
-#                                                     ^^^^        ^^^^^^             ^^^^^^
-#                                                  búsqueda     ciudad            experiencia
-```
+| Variable | Descripción | Ejemplo |
+|----------|-------------|---------|
+| `SUELDO_MIN` | Sueldo mínimo anual en EUR | `20000` |
+| `STACK` | Tecnologías preferidas | `React, Node.js, TypeScript` |
+| `UBICACION` | Ubicación o modalidad aceptada | `Malaga, remoto o hibrido` |
+| `RSS_KEYWORDS` | Términos de búsqueda en InfoJobs | `react typescript` |
+| `RSS_CITY` | Ciudad en InfoJobs | `malaga` |
+| `RSS_EXPERIENCE` | Nivel de experiencia | `junior` |
 
 ---
 
 ## 🗄️ Esquema de base de datos
 
 ```sql
+-- Un registro por usuario registrado en el bot
+CREATE TABLE users (
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    username       TEXT UNIQUE NOT NULL,
+    chat_id        INTEGER UNIQUE,
+    sueldo_min     INTEGER DEFAULT 20000,
+    stack          TEXT,
+    ubicacion      TEXT,
+    email          TEXT,
+    estado         TEXT DEFAULT 'activo'
+);
+
+-- Ofertas indexadas por usuario (clave compuesta id + user_id)
 CREATE TABLE ofertas (
-    id             TEXT PRIMARY KEY,
+    id             TEXT NOT NULL,
+    user_id        INTEGER NOT NULL,
     titulo         TEXT,
     empresa        TEXT,
     url            TEXT,
-    descripcion    TEXT,
-    fecha_captura  TEXT,
-    score          INTEGER,   -- 0-10, puntuación automática
-    motivo         TEXT,      -- razón del score en una línea
-    estado         TEXT DEFAULT 'pendiente'  -- 'pendiente' | 'aplicada'
+    score          INTEGER,      -- 0-10
+    motivo         TEXT,
+    estado         TEXT DEFAULT 'pendiente',  -- 'pendiente' | 'aplicada'
+    fecha_aplicada TEXT,
+    PRIMARY KEY (id, user_id)
+);
+
+-- Estadísticas por usuario (actualizadas automáticamente)
+CREATE TABLE stats (
+    user_id         INTEGER UNIQUE,
+    total_vistas    INTEGER DEFAULT 0,
+    total_aplicadas INTEGER DEFAULT 0
 );
 ```
 
@@ -155,10 +187,10 @@ CREATE TABLE ofertas (
 ## 🛠️ Stack tecnológico
 
 - **[Python 3.13+](https://python.org)** — lenguaje principal
-- **[python-telegram-bot](https://github.com/python-telegram-bot/python-telegram-bot)** — bot asíncrono
+- **[python-telegram-bot](https://github.com/python-telegram-bot/python-telegram-bot)** — bot asíncrono con `ConversationHandler`
 - **[feedparser](https://feedparser.readthedocs.io)** — parsing de RSS
 - **[SQLite3](https://sqlite.org)** — base de datos local, sin servidor
-- **[python-dotenv](https://github.com/theskumar/python-dotenv)** — gestión de variables de entorno
+- **[python-dotenv](https://github.com/theskumar/python-dotenv)** — gestión de variables de entorno por usuario
 
 ---
 
@@ -167,11 +199,14 @@ CREATE TABLE ofertas (
 - [x] Scraper de InfoJobs vía RSS
 - [x] Clasificación y puntuación automática de ofertas
 - [x] Bot de Telegram interactivo con teclado inline
+- [x] Sistema multi-usuario con configuración y datos aislados
+- [x] Registro de usuarios vía `/setup` desde Telegram
+- [x] Estadísticas de búsqueda por usuario
 - [ ] Generación de CV personalizado por oferta
 - [ ] Cartas de presentación adaptadas
 - [ ] Soporte para LinkedIn y otras fuentes
 - [ ] Notificaciones automáticas de nuevas ofertas
-- [ ] Historial de aplicaciones y seguimiento
+- [ ] Historial de candidaturas y seguimiento
 
 ---
 
