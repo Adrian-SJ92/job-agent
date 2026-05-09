@@ -1,27 +1,20 @@
-﻿import feedparser
-import sqlite3
+import feedparser
+import argparse
 from datetime import datetime
-from dotenv import load_dotenv
-import os
 from job_agent.classifier import classify_oferta
+from job_agent.config.config_manager import load_user_config
+from job_agent.db.schema import init_db, get_user_by_username, save_oferta
 
-load_dotenv()
 
-INFOJOBS_RSS = "https://www.infojobs.net/rss/search?q=react&city=malaga&experience=junior"
-DB_PATH = "ofertas.db"
+def build_rss_url(user_config):
+    keywords = user_config.get('RSS_KEYWORDS', 'react')
+    city = user_config.get('RSS_CITY', 'malaga')
+    experience = user_config.get('RSS_EXPERIENCE', 'junior')
+    return f"https://www.infojobs.net/rss/search?q={keywords}&city={city}&experience={experience}"
 
-def init_db():
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-    c.execute('''CREATE TABLE IF NOT EXISTS ofertas
-                 (id TEXT PRIMARY KEY, titulo TEXT, empresa TEXT, url TEXT, 
-                  descripcion TEXT, fecha_captura TEXT, score INTEGER, 
-                  motivo TEXT, estado TEXT DEFAULT 'pendiente')''')
-    conn.commit()
-    conn.close()
 
-def fetch_infojobs():
-    feed = feedparser.parse(INFOJOBS_RSS)
+def fetch_infojobs(rss_url):
+    feed = feedparser.parse(rss_url)
     ofertas = []
     for entry in feed.entries:
         oferta = {
@@ -35,43 +28,44 @@ def fetch_infojobs():
         ofertas.append(oferta)
     return ofertas
 
-def save_oferta(oferta, score, motivo):
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-    try:
-        c.execute('''INSERT OR IGNORE INTO ofertas 
-                     (id, titulo, empresa, url, descripcion, fecha_captura, score, motivo)
-                     VALUES (?, ?, ?, ?, ?, ?, ?, ?)''',
-                  (oferta['id'], oferta['titulo'], oferta['empresa'], 
-                   oferta['url'], oferta['descripcion'], 
-                   datetime.now().isoformat(), score, motivo))
-        conn.commit()
-        return True
-    except Exception as e:
-        print(f"Error guardando: {e}")
-        return False
-    finally:
-        conn.close()
 
 def main():
+    parser = argparse.ArgumentParser(description='Job Agent Scraper')
+    parser.add_argument('--user', required=True, help='Username to run scraper for')
+    args = parser.parse_args()
+
+    print(f"[*] Cargando config para usuario: {args.user}")
+    user_config = load_user_config(args.user)
+
     init_db()
-    print("[*] Capturando ofertas de InfoJobs...")
-    ofertas = fetch_infojobs()
+
+    user = get_user_by_username(args.user)
+    if not user:
+        print(f"[!] Usuario '{args.user}' no encontrado en la BD.")
+        print("    Inicia el bot y usa /setup para registrarte primero.")
+        return
+
+    user_id = user['id']
+    rss_url = build_rss_url(user_config)
+
+    print(f"[*] Capturando ofertas de InfoJobs...")
+    ofertas = fetch_infojobs(rss_url)
     print(f"[*] {len(ofertas)} ofertas encontradas")
-    
+
     buenas = 0
     for oferta in ofertas:
         print(f"  Analizando: {oferta['titulo'][:50]}...")
-        resultado = classify_oferta(oferta)
-        
+        resultado = classify_oferta(oferta, user_config)
+
         if resultado['encaja']:
             buenas += 1
-            save_oferta(oferta, resultado['score'], resultado['motivo'])
-            print(f"    ✓ Score {resultado['score']}: {resultado['motivo']}")
+            save_oferta(oferta, user_id, resultado['score'], resultado['motivo'])
+            print(f"    OK Score {resultado['score']}: {resultado['motivo']}")
         else:
-            print(f"    ✗ Descartada: {resultado['motivo']}")
-    
-    print(f"\n[✓] Proceso terminado: {buenas} ofertas válidas")
+            print(f"    X Descartada: {resultado['motivo']}")
+
+    print(f"\n[OK] Proceso terminado: {buenas} ofertas validas de {len(ofertas)}")
+
 
 if __name__ == "__main__":
     main()

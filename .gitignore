@@ -7,3 +7,7 @@ ofertas.db
 *.log
 .vscode/
 CLAUDE.md
+
+# Config con credenciales de usuario (mantener solo los .example)
+config/*.env
+config/users.json
