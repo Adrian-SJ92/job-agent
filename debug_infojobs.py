@@ -1,49 +1,37 @@
-from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.chrome.service import Service
-import time
+import requests
+from bs4 import BeautifulSoup
 
-opts = Options()
-opts.add_argument('--headless')
-opts.add_argument('--no-sandbox')
-opts.add_argument('--disable-dev-shm-usage')
-opts.add_argument('--disable-gpu')
-opts.add_argument('--disable-blink-features=AutomationControlled')
-opts.add_argument('user-agent=Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Mobile Safari/537.36')
-opts.add_experimental_option('excludeSwitches', ['enable-automation'])
-opts.add_experimental_option('useAutomationExtension', False)
-opts.binary_location = '/usr/bin/chromium'
-
-print("Iniciando driver...")
-driver = webdriver.Chrome(service=Service('/usr/bin/chromedriver'), options=opts)
-
-# Ocultar navigator.webdriver
-driver.execute_cdp_cmd('Page.addScriptToEvaluateOnNewDocument', {
-    'source': 'Object.defineProperty(navigator, "webdriver", {get: () => undefined})'
+session = requests.Session()
+session.headers.update({
+    'User-Agent': 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Mobile Safari/537.36',
+    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+    'Accept-Language': 'es-ES,es;q=0.9',
+    'Accept-Encoding': 'gzip, deflate, br',
+    'Referer': 'https://www.infojobs.net/',
+    'DNT': '1',
+    'Connection': 'keep-alive',
+    'Upgrade-Insecure-Requests': '1',
 })
 
-print("Driver OK")
+# Primero cargar la home para obtener cookies de sesión
+print("Cargando home...")
+session.get('https://www.infojobs.net/', timeout=15)
 
+print("Buscando ofertas React en Málaga...")
 url = 'https://www.infojobs.net/jobsearch/search-results/list.xhtml?keyword=React&provinceIds=29'
-print(f"Cargando: {url}")
-driver.get(url)
-print("Esperando 6s...")
-time.sleep(6)
+r = session.get(url, timeout=15)
+print(f"Status: {r.status_code} | HTML: {len(r.text)} chars")
 
-html = driver.page_source
-print(f"HTML recibido: {len(html)} chars")
-
-if 'captcha' in html.lower():
-    print("SIGUE CAPTCHA — anti-bot activo")
+if 'captcha' in r.text.lower():
+    print("CAPTCHA — bloqueado también con requests")
 else:
-    print("SIN CAPTCHA — buscando ofertas...")
-    # Mostrar clases de los primeros <li> para identificar el selector correcto
-    from bs4 import BeautifulSoup
-    soup = BeautifulSoup(html, 'html.parser')
-    lis = soup.find_all('li')[:10]
-    for li in lis:
-        print(f"  <li class='{li.get('class')}'>")
+    print("SIN CAPTCHA — analizando estructura...")
+    soup = BeautifulSoup(r.text, 'html.parser')
+    # Buscar cualquier lista de ofertas
+    for li in soup.find_all('li')[:15]:
+        cls = li.get('class', [])
+        if cls:
+            print(f"  <li class='{' '.join(cls)}'>")
 
-print("--- PRIMEROS 2000 CHARS ---")
-print(html[:2000])
-driver.quit()
+print("\n--- PRIMEROS 2000 CHARS ---")
+print(r.text[:2000])
