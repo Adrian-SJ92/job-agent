@@ -21,9 +21,13 @@ def build_infojobs_url(user_config: Dict) -> str:
     stack_list = [s.strip() for s in stack.split(',')]
     keyword = stack_keywords.get(stack_list[0], stack_list[0].lower())
     
+    # Limpiar ubicación: solo la primera palabra
+    ciudad = ubicacion.split(',')[0].split()[0].lower()
+    
     # Construir URL
-    url = f"https://www.infojobs.net/rss/search?q={keyword}&city={ubicacion}&experience=junior"
+    url = f"https://www.infojobs.net/rss/search?q={keyword}&city={ciudad}&experience=junior"
     return url
+
 
 def fetch_infojobs(user_config: Dict) -> List[Dict]:
     """Obtiene ofertas de InfoJobs"""
