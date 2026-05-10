@@ -1,35 +1,25 @@
+import feedparser
 import requests
-from bs4 import BeautifulSoup
 
-session = requests.Session()
-session.headers.update({
-    'User-Agent': 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Mobile Safari/537.36',
-    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-    'Accept-Language': 'es-ES,es;q=0.9',
-    'Referer': 'https://www.infojobs.net/',
-    'Connection': 'keep-alive',
-})
-session.get('https://www.infojobs.net/', timeout=15)
-
-urls_a_probar = [
-    'https://www.infojobs.net/ofertas-trabajo/malaga/react',
-    'https://www.infojobs.net/ofertas-trabajo/malaga/react?page=1',
-    'https://www.infojobs.net/jobsearch/search-results/list.xhtml?keyword=React&provinceIds=29',
-    'https://www.infojobs.net/jobsearch/search-results/list.xhtml?keyword=React&provinceIds=29&page=1',
+urls = [
+    'https://www.infojobs.net/rss/search?q=React&city=malaga',
+    'https://www.infojobs.net/rss/search?q=React&city=m%C3%A1laga',
+    'https://www.infojobs.net/rss/search?q=React',
+    'https://www.infojobs.net/rss/search?q=programador',
+    'https://www.infojobs.net/rss/ofertas.xhtml?segmentId=0&q=React',
 ]
 
-for url in urls_a_probar:
-    r = session.get(url, timeout=15)
-    soup = BeautifulSoup(r.text, 'html.parser')
-    all_cards = soup.find_all('li', class_='ij-OfferList-offerCardItem')
-    real_cards = [c for c in all_cards if 'sui-PrimitiveLinkBox' in ' '.join(c.get('class', []))]
-    print(f"\nURL: {url}")
-    print(f"  Total cards: {len(all_cards)} | Reales: {len(real_cards)}")
-    if real_cards:
-        first = real_cards[0]
-        titulo = first.find('span', class_='ij-OfferCardContent-description-title-link')
-        link = first.find('a', class_='ij-OfferCardContent-description-link')
-        salario = first.find('span', class_='ij-OfferCardContent-description-salary-info')
-        print(f"  Titulo: {titulo.get_text(strip=True)[:60] if titulo else 'N/A'}")
-        print(f"  URL:    {link.get('href', 'N/A') if link else 'N/A'}")
-        print(f"  Salario:{salario.get_text(strip=True) if salario else 'N/A'}")
+for url in urls:
+    feed = feedparser.parse(url)
+    print(f"\n{url}")
+    print(f"  Entries: {len(feed.entries)} | Status: {feed.get('status', '?')} | bozo: {feed.get('bozo', '?')}")
+    if feed.entries:
+        print(f"  Primera: {feed.entries[0].get('title', 'N/A')}")
+    elif feed.feed:
+        print(f"  Feed title: {feed.feed.get('title', 'N/A')}")
+
+# Probar también con requests directo para ver qué devuelve
+print("\n--- RAW RSS con requests ---")
+r = requests.get('https://www.infojobs.net/rss/search?q=React', timeout=10)
+print(f"Status: {r.status_code}")
+print(r.text[:500])
