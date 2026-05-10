@@ -11,29 +11,25 @@ session.headers.update({
 })
 session.get('https://www.infojobs.net/', timeout=15)
 
-# Buscar sin provincia para obtener más resultados
-url = 'https://www.infojobs.net/jobsearch/search-results/list.xhtml?keyword=React'
-r = session.get(url, timeout=15)
-soup = BeautifulSoup(r.text, 'html.parser')
+urls_a_probar = [
+    'https://www.infojobs.net/ofertas-trabajo/malaga/react',
+    'https://www.infojobs.net/ofertas-trabajo/malaga/react?page=1',
+    'https://www.infojobs.net/jobsearch/search-results/list.xhtml?keyword=React&provinceIds=29',
+    'https://www.infojobs.net/jobsearch/search-results/list.xhtml?keyword=React&provinceIds=29&page=1',
+]
 
-# Solo cards reales (con ij-OfferCardContent dentro)
-cards = [c for c in soup.find_all('li', class_='ij-OfferList-offerCardItem')
-         if c.find('div', class_='ij-OfferCardContent')]
-
-print(f"Ofertas reales encontradas: {len(cards)}")
-
-for i, card in enumerate(cards[:5]):
-    titulo = card.find('span', class_='ij-OfferCardContent-description-title-link')
-    empresa = card.find('h3', class_='ij-OfferCardContent-description-subtitle')
-    link = card.find('a', class_='ij-OfferCardContent-description-link')
-    salario = card.find('span', class_='ij-OfferCardContent-description-salary-info')
-    items = card.find_all('li', class_='ij-OfferCardContent-description-list-item')
-    hidden_items = card.find_all('li', class_='ij-OfferCardContent-description-list-item--hideOnMobile')
-
-    print(f"\n--- Oferta {i+1} ---")
-    print(f"  Titulo:  {titulo.get_text(strip=True) if titulo else 'N/A'}")
-    print(f"  Empresa: {empresa.get_text(strip=True) if empresa else 'N/A'}")
-    print(f"  URL:     {link.get('href', 'N/A') if link else 'N/A'}")
-    print(f"  Salario: {salario.get_text(strip=True) if salario else 'N/A'}")
-    print(f"  Items:   {[i.get_text(strip=True) for i in items]}")
-    print(f"  Hidden:  {[i.get_text(strip=True) for i in hidden_items]}")
+for url in urls_a_probar:
+    r = session.get(url, timeout=15)
+    soup = BeautifulSoup(r.text, 'html.parser')
+    all_cards = soup.find_all('li', class_='ij-OfferList-offerCardItem')
+    real_cards = [c for c in all_cards if 'sui-PrimitiveLinkBox' in ' '.join(c.get('class', []))]
+    print(f"\nURL: {url}")
+    print(f"  Total cards: {len(all_cards)} | Reales: {len(real_cards)}")
+    if real_cards:
+        first = real_cards[0]
+        titulo = first.find('span', class_='ij-OfferCardContent-description-title-link')
+        link = first.find('a', class_='ij-OfferCardContent-description-link')
+        salario = first.find('span', class_='ij-OfferCardContent-description-salary-info')
+        print(f"  Titulo: {titulo.get_text(strip=True)[:60] if titulo else 'N/A'}")
+        print(f"  URL:    {link.get('href', 'N/A') if link else 'N/A'}")
+        print(f"  Salario:{salario.get_text(strip=True) if salario else 'N/A'}")
