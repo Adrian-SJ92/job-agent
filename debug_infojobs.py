@@ -9,25 +9,31 @@ session.headers.update({
     'Referer': 'https://www.infojobs.net/',
     'Connection': 'keep-alive',
 })
-
 session.get('https://www.infojobs.net/', timeout=15)
 
-url = 'https://www.infojobs.net/jobsearch/search-results/list.xhtml?keyword=React&provinceIds=29'
+# Buscar sin provincia para obtener más resultados
+url = 'https://www.infojobs.net/jobsearch/search-results/list.xhtml?keyword=React'
 r = session.get(url, timeout=15)
 soup = BeautifulSoup(r.text, 'html.parser')
 
-# Buscar cualquier elemento que contenga título de oferta
-print("=== Buscando 'oferta' en clases de elementos ===")
-for tag in soup.find_all(True):
-    cls = ' '.join(tag.get('class', []))
-    if 'offer' in cls.lower() or 'ofert' in cls.lower() or 'job' in cls.lower():
-        txt = tag.get_text(strip=True)[:80]
-        print(f"  <{tag.name} class='{cls}'> {txt}")
+# Solo cards reales (con ij-OfferCardContent dentro)
+cards = [c for c in soup.find_all('li', class_='ij-OfferList-offerCardItem')
+         if c.find('div', class_='ij-OfferCardContent')]
 
-print("\n=== Buscando <article> o <section> con contenido de oferta ===")
-for tag in soup.find_all(['article', 'section', 'div']):
-    cls = ' '.join(tag.get('class', []))
-    if any(x in cls for x in ['card', 'Card', 'result', 'Result', 'item', 'Item']):
-        txt = tag.get_text(strip=True)[:100]
-        if txt:
-            print(f"  <{tag.name} class='{cls}'> {txt[:80]}")
+print(f"Ofertas reales encontradas: {len(cards)}")
+
+for i, card in enumerate(cards[:5]):
+    titulo = card.find('span', class_='ij-OfferCardContent-description-title-link')
+    empresa = card.find('h3', class_='ij-OfferCardContent-description-subtitle')
+    link = card.find('a', class_='ij-OfferCardContent-description-link')
+    salario = card.find('span', class_='ij-OfferCardContent-description-salary-info')
+    items = card.find_all('li', class_='ij-OfferCardContent-description-list-item')
+    hidden_items = card.find_all('li', class_='ij-OfferCardContent-description-list-item--hideOnMobile')
+
+    print(f"\n--- Oferta {i+1} ---")
+    print(f"  Titulo:  {titulo.get_text(strip=True) if titulo else 'N/A'}")
+    print(f"  Empresa: {empresa.get_text(strip=True) if empresa else 'N/A'}")
+    print(f"  URL:     {link.get('href', 'N/A') if link else 'N/A'}")
+    print(f"  Salario: {salario.get_text(strip=True) if salario else 'N/A'}")
+    print(f"  Items:   {[i.get_text(strip=True) for i in items]}")
+    print(f"  Hidden:  {[i.get_text(strip=True) for i in hidden_items]}")
