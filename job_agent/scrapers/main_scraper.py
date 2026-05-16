@@ -44,9 +44,15 @@ def run_scraper_for_user(username: str):
         # Clasificar
         resultado = classify_oferta(oferta)
         
-        if resultado['encaja']:
+        score = resultado.get('score', 0)
+        motivo = resultado.get('motivo', '')
+        encaja = resultado.get('encaja', False)
+
+        print(f"  {'✓' if encaja else '✗'} [{score}/10] {oferta['titulo'][:50]}")
+        print(f"      → {motivo}")
+
+        if encaja:
             buenas += 1
-            # Guardar en BD
             save_oferta(
                 user_id=user_id,
                 titulo=oferta['titulo'],
@@ -54,10 +60,9 @@ def run_scraper_for_user(username: str):
                 url=oferta['url'],
                 descripcion=oferta['descripcion'],
                 fuente=oferta['fuente'],
-                score=resultado['score'],
-                motivo=resultado['motivo']
+                score=score,
+                motivo=motivo,
             )
-            print(f"  ✓ {oferta['titulo'][:50]} (score {resultado['score']}/10)")
     
     # Paso 5: Resumen
     print(f"\n[✓] Scraper terminado")
