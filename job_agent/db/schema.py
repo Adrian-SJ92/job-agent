@@ -164,12 +164,12 @@ def save_oferta(oferta, user_id, score, motivo):
              oferta['url'], oferta['descripcion'], oferta.get('fuente', 'infojobs'),
              datetime.now().isoformat(), score, motivo)
         )
+        inserted = c.rowcount > 0  # leer antes del UPDATE, que sobreescribe rowcount
         c.execute(
             '''UPDATE stats SET total_vistas = total_vistas + 1, fecha_actualizado = ?
                WHERE user_id = ?''',
             (datetime.now().isoformat(), user_id)
         )
-        inserted = c.rowcount > 0
         conn.commit()
         return inserted  # True = nueva, False = ya existía
     except Exception as e:
