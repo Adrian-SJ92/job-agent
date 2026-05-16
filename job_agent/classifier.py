@@ -1,4 +1,5 @@
 import json
+import re
 from anthropic import Anthropic
 
 
@@ -40,7 +41,18 @@ def classify_oferta(oferta, user_config=None):
             messages=[{"role": "user", "content": classifier_prompt(oferta, user_config)}]
         )
         text = response.content[0].text.strip()
+        # Eliminar markdown code fences si el modelo los añade
+        if text.startswith("```"):
+            text = re.sub(r"^```[a-z]*\n?", "", text)
+            text = re.sub(r"\n?```$", "", text)
+            text = text.strip()
+        if not text:
+            print(f"Error clasificando: respuesta vacía del API (stop_reason={response.stop_reason})")
+            return {"encaja": False, "score": 0, "motivo": "Respuesta vacía del API"}
         return json.loads(text)
+    except json.JSONDecodeError as e:
+        print(f"Error clasificando JSON: {e} | Respuesta: {repr(text)}")
+        return {"encaja": False, "score": 0, "motivo": f"JSON inválido: {e}"}
     except Exception as e:
         print(f"Error clasificando: {e}")
         return {"encaja": False, "score": 0, "motivo": f"Error: {e}"}
