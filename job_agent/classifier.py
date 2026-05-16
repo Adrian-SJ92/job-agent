@@ -9,12 +9,20 @@ def classifier_prompt(oferta, user_config=None):
     stack = cfg.get('STACK', 'React, Node.js, JavaScript, Python')
     ubicacion = cfg.get('UBICACION', 'Malaga, remoto o hibrido en Espana')
 
-    return f"""Analiza esta oferta de empleo y decide si encaja con estos criterios:
-- Sueldo MINIMO: {sueldo_min} EUR anuales
-- Rol: Frontend Junior preferible, pero flexible en stack
-- Ubicacion: {ubicacion}
-- Stack: {stack}. Evitar legacy (Java viejo, PHP puro)
-- Empresa: Startup/Scale-up preferible, evitar consultoras grandes
+    return f"""Analiza esta oferta de empleo para un desarrollador web.
+
+CRITERIOS DEL CANDIDATO:
+- Stack preferido: {stack}
+- Ubicacion aceptada: {ubicacion}
+- Sueldo minimo deseado: {sueldo_min} EUR/año (si no se menciona, no penalices)
+- Tipo empresa: startups preferibles, pero consultoras tambien son validas
+- Rechazar solo si: stack claramente legacy (COBOL, .NET viejo), o ubicacion claramente incompatible
+
+REGLAS:
+- Si falta informacion (sueldo, ubicacion, empresa), da beneficio de la duda y no rechaces
+- encaja=true si el stack/rol tiene algo de coincidencia con el candidato
+- Penaliza en score pero no rechaces por ser consultora o por falta de datos
+- Solo encaja=false si hay mismatch CLARO y SEGURO
 
 OFERTA:
 Titulo: {oferta['titulo']}
