@@ -5,6 +5,7 @@ from .gmail import fetch_linkedin_alerts
 from .normalizer import merge_sources
 from job_agent.db.schema import get_user_by_username, save_oferta
 from job_agent.classifier import classify_oferta
+from job_agent.notifier import notify_ofertas
 
 def run_scraper_for_user(username: str):
     """
@@ -39,11 +40,11 @@ def run_scraper_for_user(username: str):
     # Paso 4: Clasificar y guardar
     print("[*] Clasificando con Claude...")
     buenas = 0
-    
+    nuevas_para_notificar = []
+
     for oferta in ofertas:
-        # Clasificar
         resultado = classify_oferta(oferta)
-        
+
         score = resultado.get('score', 0)
         motivo = resultado.get('motivo', '')
         encaja = resultado.get('encaja', False)
@@ -51,14 +52,20 @@ def run_scraper_for_user(username: str):
         print(f"  {'✓' if encaja else '✗'} [{score}/10] {oferta['titulo'][:50]}")
         print(f"      → {motivo}")
 
-        if encaja:
-            buenas += 1
-            save_oferta(oferta, user_id, score, motivo)
-    
-    # Paso 5: Resumen
+        if encaja and score >= 7:
+            guardada = save_oferta(oferta, user_id, score, motivo)
+            if guardada:  # solo notificar si es nueva (INSERT, no IGNORE)
+                buenas += 1
+                nuevas_para_notificar.append({**oferta, 'score': score, 'motivo': motivo})
+
+    # Paso 5: Notificar por Telegram
+    if nuevas_para_notificar:
+        notify_ofertas(nuevas_para_notificar, user)
+
+    # Paso 6: Resumen
     print(f"\n[✓] Scraper terminado")
     print(f"  Total procesadas: {len(ofertas)}")
-    print(f"  Guardadas: {buenas}")
+    print(f"  Guardadas y notificadas: {buenas}")
     print(f"  Descartadas: {len(ofertas) - buenas}")
 
 if __name__ == "__main__":

@@ -169,8 +169,9 @@ def save_oferta(oferta, user_id, score, motivo):
                WHERE user_id = ?''',
             (datetime.now().isoformat(), user_id)
         )
+        inserted = c.rowcount > 0
         conn.commit()
-        return True
+        return inserted  # True = nueva, False = ya existía
     except Exception as e:
         print(f"Error guardando oferta: {e}")
         return False
