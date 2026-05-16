@@ -30,11 +30,7 @@ def run_scraper_for_user(username: str):
     infojobs_ofertas = fetch_infojobs(user)
     
     print("[*] Scrapeando alertas de LinkedIn...")
-    if user['email'] and user.get('gmail_password'):  # Verificar credenciales
-        linkedin_ofertas = fetch_linkedin_alerts(user['email'], user['gmail_password'])
-    else:
-        print("[!] Gmail no configurado, saltando LinkedIn")
-        linkedin_ofertas = []
+    linkedin_ofertas = fetch_linkedin_alerts(user)
     
     # Paso 3: Normalizar y deduplicar
     print("\n[*] Normalizando ofertas...")
