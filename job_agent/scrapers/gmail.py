@@ -1,5 +1,6 @@
 import imaplib
 import email
+import os
 from email.header import decode_header
 from datetime import datetime, timedelta
 from typing import List, Dict
@@ -7,6 +8,7 @@ import re
 import hashlib
 
 from bs4 import BeautifulSoup
+from dotenv import load_dotenv
 
 JOB_KEYWORDS = [
     'developer', 'engineer', 'react', 'python', 'javascript', 'node',
@@ -134,15 +136,15 @@ def _build_description(plain: str, html: str) -> str:
 
 def fetch_linkedin_alerts(user_config: Dict) -> List[Dict]:
     """Obtiene alertas de LinkedIn desde Gmail usando credenciales de user_config."""
-    gmail_user = (
-        user_config.get('GMAIL_USER')
-        or user_config.get('gmail_user')
-        or user_config.get('email', '')
-    )
-    gmail_password = user_config.get('GMAIL_PASSWORD') or user_config.get('gmail_password', '')
+    username = user_config.get('username', '')
+    env_path = os.path.join('config', f'{username}.env')
+    load_dotenv(env_path, override=True)
+
+    gmail_user = os.getenv('GMAIL_USER', '')
+    gmail_password = os.getenv('GMAIL_PASSWORD', '')
 
     if not gmail_user or not gmail_password:
-        print("[Gmail] Sin credenciales, omitiendo LinkedIn vía Gmail")
+        print(f"[Gmail] Sin credenciales en {env_path}")
         return []
 
     mail = _connect(gmail_user, gmail_password)
