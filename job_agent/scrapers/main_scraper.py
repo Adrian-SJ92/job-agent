@@ -4,7 +4,6 @@ from .infojobs import fetch_infojobs
 from .gmail import fetch_linkedin_alerts
 from .normalizer import merge_sources
 from job_agent.db.schema import get_user_by_username, save_oferta
-from job_agent.config.config_manager import load_user_config
 from job_agent.classifier import classify_oferta
 
 def run_scraper_for_user(username: str):
@@ -21,9 +20,6 @@ def run_scraper_for_user(username: str):
     if not user:
         print(f"[ERROR] Usuario '{username}' no encontrado")
         return
-
-    env_config = load_user_config(username)
-    user = {**user, **env_config}
 
     user_id = user['id']
     print(f"\n[*] Iniciando scraper para: {username}")
