@@ -134,8 +134,12 @@ def _build_description(plain: str, html: str) -> str:
 
 def fetch_linkedin_alerts(user_config: Dict) -> List[Dict]:
     """Obtiene alertas de LinkedIn desde Gmail usando credenciales de user_config."""
-    gmail_user = user_config.get('gmail_user') or user_config.get('GMAIL_USER', '')
-    gmail_password = user_config.get('gmail_password') or user_config.get('GMAIL_PASSWORD', '')
+    gmail_user = (
+        user_config.get('GMAIL_USER')
+        or user_config.get('gmail_user')
+        or user_config.get('email', '')
+    )
+    gmail_password = user_config.get('GMAIL_PASSWORD') or user_config.get('gmail_password', '')
 
     if not gmail_user or not gmail_password:
         print("[Gmail] Sin credenciales, omitiendo LinkedIn vía Gmail")
