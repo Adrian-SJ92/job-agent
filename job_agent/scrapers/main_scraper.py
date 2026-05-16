@@ -1,11 +1,23 @@
 import sys
+import os
 import argparse
+from dotenv import load_dotenv
 from .infojobs import fetch_infojobs
 from .gmail import fetch_linkedin_alerts
 from .normalizer import merge_sources
 from job_agent.db.schema import get_user_by_username, save_oferta
 from job_agent.classifier import classify_oferta
 from job_agent.notifier import notify_ofertas
+
+
+def _load_user_env(username: str):
+    """Carga el .env del usuario al inicio para que todos los módulos lo vean."""
+    env_path = os.path.join('config', f'{username}.env')
+    if not os.path.exists(env_path):
+        candidates = [f for f in os.listdir('config') if f.endswith('.env') and not f.endswith('.example')]
+        env_path = os.path.join('config', candidates[0]) if candidates else env_path
+    load_dotenv(env_path, override=True)
+    print(f"[Config] Cargado {env_path}")
 
 def run_scraper_for_user(username: str):
     """
@@ -16,7 +28,8 @@ def run_scraper_for_user(username: str):
     4. Guarda en BD
     """
 
-    # Paso 1: Obtener usuario de BD y combinar con config del .env
+    # Paso 1: Cargar .env y obtener usuario de BD
+    _load_user_env(username)
     user = get_user_by_username(username)
     if not user:
         print(f"[ERROR] Usuario '{username}' no encontrado")
