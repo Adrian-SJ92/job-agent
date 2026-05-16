@@ -53,16 +53,7 @@ def run_scraper_for_user(username: str):
 
         if encaja:
             buenas += 1
-            save_oferta(
-                user_id=user_id,
-                titulo=oferta['titulo'],
-                empresa=oferta['empresa'],
-                url=oferta['url'],
-                descripcion=oferta['descripcion'],
-                fuente=oferta['fuente'],
-                score=score,
-                motivo=motivo,
-            )
+            save_oferta(oferta, user_id, score, motivo)
     
     # Paso 5: Resumen
     print(f"\n[✓] Scraper terminado")
