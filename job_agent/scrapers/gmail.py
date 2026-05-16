@@ -137,7 +137,11 @@ def _build_description(plain: str, html: str) -> str:
 def fetch_linkedin_alerts(user_config: Dict) -> List[Dict]:
     """Obtiene alertas de LinkedIn desde Gmail usando credenciales de user_config."""
     username = user_config.get('username', '')
+    # Buscar el .env: primero {username}.env, luego cualquier .env en config/
     env_path = os.path.join('config', f'{username}.env')
+    if not os.path.exists(env_path):
+        candidates = [f for f in os.listdir('config') if f.endswith('.env') and not f.endswith('.example')]
+        env_path = os.path.join('config', candidates[0]) if candidates else env_path
     load_dotenv(env_path, override=True)
 
     gmail_user = os.getenv('GMAIL_USER', '')
@@ -146,6 +150,8 @@ def fetch_linkedin_alerts(user_config: Dict) -> List[Dict]:
     if not gmail_user or not gmail_password:
         print(f"[Gmail] Sin credenciales en {env_path}")
         return []
+
+    print(f"[Gmail] Usando credenciales de {env_path} ({gmail_user})")
 
     mail = _connect(gmail_user, gmail_password)
     if not mail:
