@@ -153,6 +153,13 @@ def fetch_linkedin_alerts(user_config: Dict) -> List[Dict]:
 
     print(f"[Gmail] Usando credenciales de {env_path} ({gmail_user})")
 
+    # Remitentes de LinkedIn que contienen ofertas de empleo
+    JOB_SENDERS = {
+        'jobalerts-noreply@linkedin.com',   # alertas de empleo
+        'jobs-noreply@linkedin.com',         # empleos similares / recomendados
+        'jobs-listings@linkedin.com',        # listados de empleo
+    }
+
     mail = _connect(gmail_user, gmail_password)
     if not mail:
         return []
@@ -161,13 +168,9 @@ def fetch_linkedin_alerts(user_config: Dict) -> List[Dict]:
     try:
         mail.select("INBOX")
 
-        # Buscar emails de LinkedIn de los últimos 7 días
+        # Buscar todos los emails de @linkedin.com de los últimos 7 días
         since_date = (datetime.now() - timedelta(days=7)).strftime("%d-%b-%Y")
-        status, messages = mail.search(
-            None,
-            f'FROM "linkedin-noreply@linkedin.com"',
-            f'SINCE {since_date}',
-        )
+        status, messages = mail.search(None, 'FROM "linkedin.com"', f'SINCE {since_date}')
         if status != 'OK':
             print("[Gmail] Error en búsqueda IMAP")
             return []
@@ -183,34 +186,47 @@ def fetch_linkedin_alerts(user_config: Dict) -> List[Dict]:
 
         for email_id in email_ids:
             try:
-                status, msg_data = mail.fetch(email_id, "(RFC822)")
-                if status != 'OK' or not msg_data or not msg_data[0]:
+                # Fetch solo cabeceras para filtrar rápido por remitente
+                status, hdr_data = mail.fetch(email_id, "(BODY.PEEK[HEADER.FIELDS (FROM SUBJECT DATE)])")
+                if status != 'OK' or not hdr_data or not hdr_data[0]:
                     continue
 
-                msg = email.message_from_bytes(msg_data[0][1])
-                fecha = msg.get('Date', datetime.now().isoformat())
-                plain, html = _get_body(msg)
-                descripcion = _build_description(plain, html)
+                hdr_msg = email.message_from_bytes(hdr_data[0][1])
+                sender = hdr_msg.get('From', '')
+                fecha = hdr_msg.get('Date', datetime.now().isoformat())
+                subject_raw = hdr_msg.get('Subject', '')
 
-                # Extraer trabajos: preferir HTML (más estructura), complementar con plain
-                jobs = _extract_jobs_from_html(html) if html else []
-                if not jobs and plain:
-                    jobs = _extract_jobs_from_plain(plain)
+                # Filtrar solo remitentes de ofertas de empleo
+                if not any(s in sender for s in JOB_SENDERS):
+                    continue
 
-                for job in jobs:
-                    offer_id = hashlib.md5(
-                        f"linkedin_{job['titulo']}_{fecha}".encode()
-                    ).hexdigest()[:12]
+                # Decodificar Subject (puede venir en UTF-8 encoded)
+                subject = _decode_header_value(subject_raw)
 
-                    ofertas.append({
-                        'id': offer_id,
-                        'titulo': job['titulo'][:120],
-                        'empresa': 'LinkedIn',
-                        'url': job['url'],
-                        'descripcion': descripcion,
-                        'fuente': 'linkedin',
-                        'fecha_publicacion': fecha,
-                    })
+                # Extraer título y empresa del Subject
+                # Patrón LinkedIn: "Título del puesto en Empresa"
+                titulo = subject.strip()
+                empresa = 'LinkedIn'
+                if ' en ' in subject:
+                    parts = subject.rsplit(' en ', 1)
+                    titulo = parts[0].strip()
+                    empresa = parts[1].strip()
+
+                # Filtrar por keywords técnicas
+                if not any(kw in titulo.lower() for kw in JOB_KEYWORDS):
+                    continue
+
+                offer_id = hashlib.md5(f"linkedin_{titulo}_{empresa}".encode()).hexdigest()[:12]
+
+                ofertas.append({
+                    'id': offer_id,
+                    'titulo': titulo[:120],
+                    'empresa': empresa[:100],
+                    'url': '',
+                    'descripcion': subject,
+                    'fuente': 'linkedin',
+                    'fecha_publicacion': fecha,
+                })
 
             except Exception as e:
                 print(f"[Gmail] Error procesando email {email_id}: {e}")
