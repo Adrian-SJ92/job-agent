@@ -6,9 +6,10 @@ from telegram.ext import (
 )
 from job_agent.db.schema import (
     init_db, get_user_by_chat_id, create_user, update_user_config,
-    get_user_ofertas, get_user_stats
+    get_user_ofertas, get_user_stats, get_oferta_by_id
 )
 from job_agent.config.config_manager import load_user_config
+from job_agent.cv_generator import generate_adapted_cv
 
 # ConversationHandler states
 SETUP_USERNAME, SETUP_SUELDO, SETUP_STACK, SETUP_UBICACION, SETUP_EMAIL = range(5)
@@ -231,8 +232,52 @@ def _pendientes_text(user_id):
         return "Sin ofertas pendientes"
     text = "*Ofertas Pendientes*\n\n"
     for o in ofertas:
-        text += f"*{o['titulo']}* ({o['score']}/10)\n{o['empresa']}\n{o['url']}\n\n"
+        text += f"*{o['titulo']}* ({o['score']}/10)\n{o['empresa']}\n{o['url']}\n/cv {o['id']}\n\n"
     return text
+
+
+# --- /cv ---
+
+async def cv_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = _get_user(update)
+    if not user:
+        await update.message.reply_text("Usa /setup para registrarte primero.")
+        return
+
+    if not context.args:
+        await update.message.reply_text(
+            "Uso: /cv [id\\_oferta]\n\nEjemplo: /cv abc123def456\n\n"
+            "Encuentra el ID en /pendientes.",
+            parse_mode="Markdown"
+        )
+        return
+
+    oferta_id = context.args[0]
+    oferta = get_oferta_by_id(oferta_id, user['id'])
+    if not oferta:
+        await update.message.reply_text(
+            f"Oferta '{oferta_id}' no encontrada o no tienes acceso."
+        )
+        return
+
+    await update.message.reply_text("Generando CV adaptado con Claude Sonnet... un momento.")
+
+    try:
+        user_config = context.bot_data.get('user_config', {})
+        cv_path = generate_adapted_cv(oferta, user_config)
+        filename = f"CV_{oferta['empresa']}_{oferta['titulo'][:30]}.pdf".replace(' ', '_')
+        with open(cv_path, 'rb') as f:
+            await context.bot.send_document(
+                chat_id=update.effective_chat.id,
+                document=f,
+                filename=filename,
+                caption=f"CV adaptado para: *{oferta['titulo']}* en {oferta['empresa']}",
+                parse_mode="Markdown"
+            )
+    except FileNotFoundError as e:
+        await update.message.reply_text(f"CV base no encontrado: {e}")
+    except Exception as e:
+        await update.message.reply_text(f"Error generando CV: {e}")
 
 
 # --- /stats ---
@@ -277,6 +322,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "*Ayuda*\n\n"
             "/start - Menu principal\n"
             "/pendientes - Ver ofertas\n"
+            "/cv [id] - Generar CV adaptado a la oferta\n"
             "/stats - Estadisticas\n"
             "/config - Editar sueldo, stack, ubicacion\n"
             "/setup - Registro inicial",
@@ -286,9 +332,10 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # --- Bot startup ---
 
-def start_bot(token):
+def start_bot(token, user_config=None):
     init_db()
     application = Application.builder().token(token).build()
+    application.bot_data['user_config'] = user_config or {}
 
     setup_conv = ConversationHandler(
         entry_points=[CommandHandler("setup", setup_start)],
@@ -317,6 +364,7 @@ def start_bot(token):
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("pendientes", pendientes_cmd))
     application.add_handler(CommandHandler("stats", stats_cmd))
+    application.add_handler(CommandHandler("cv", cv_command))
     application.add_handler(CallbackQueryHandler(button_callback))
 
     application.run_polling()
@@ -334,7 +382,7 @@ def main():
         return
 
     print(f"[*] Iniciando bot para usuario: {args.user}")
-    start_bot(token)
+    start_bot(token, config)
 
 
 if __name__ == "__main__":

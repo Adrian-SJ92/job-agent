@@ -152,6 +152,22 @@ def get_user_ofertas(user_id, estado=None, limit=10):
     return [dict(zip(cols, row)) for row in rows]
 
 
+def get_oferta_by_id(oferta_id, user_id):
+    conn = get_conn()
+    c = conn.cursor()
+    cols = ['id', 'user_id', 'titulo', 'empresa', 'url', 'descripcion', 'fuente',
+            'fecha_captura', 'score', 'motivo', 'estado', 'fecha_aplicada', 'feedback']
+    c.execute(
+        '''SELECT id, user_id, titulo, empresa, url, descripcion, fuente,
+           fecha_captura, score, motivo, estado, fecha_aplicada, feedback
+           FROM ofertas WHERE id = ? AND user_id = ?''',
+        (oferta_id, user_id)
+    )
+    row = c.fetchone()
+    conn.close()
+    return dict(zip(cols, row)) if row else None
+
+
 def save_oferta(oferta, user_id, score, motivo):
     conn = get_conn()
     c = conn.cursor()
