@@ -12,6 +12,7 @@ from job_agent.config.config_manager import load_user_config
 
 # ConversationHandler states
 SETUP_USERNAME, SETUP_SUELDO, SETUP_STACK, SETUP_UBICACION, SETUP_EMAIL = range(5)
+CONFIG_FIELD, CONFIG_VALUE = range(5, 7)
 
 
 def _get_user(update: Update):
@@ -135,6 +136,84 @@ async def setup_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return ConversationHandler.END
 
 
+# --- /config ---
+
+CONFIG_FIELDS = {
+    'sueldo': ('sueldo_min', 'Sueldo mínimo anual (EUR). Ejemplo: 25000'),
+    'stack':  ('stack',      'Stack tecnológico. Ejemplo: React, Node.js, TypeScript, Python'),
+    'ubicacion': ('ubicacion', 'Ubicación/modalidad. Ejemplo: Málaga, remoto o híbrido'),
+    'email':  ('email',      'Email de contacto'),
+}
+
+
+async def config_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = _get_user(update)
+    if not user:
+        await update.message.reply_text("Usa /setup para registrarte primero.")
+        return ConversationHandler.END
+
+    keyboard = [[InlineKeyboardButton(f.capitalize(), callback_data=f"cfg_{f}")] for f in CONFIG_FIELDS]
+    keyboard.append([InlineKeyboardButton("Cancelar", callback_data="cfg_cancel")])
+
+    text = (
+        f"*Configuración actual*\n\n"
+        f"💰 Sueldo mín: {user['sueldo_min']}€\n"
+        f"🛠 Stack: {user['stack']}\n"
+        f"📍 Ubicación: {user['ubicacion']}\n"
+        f"📧 Email: {user['email'] or '—'}\n\n"
+        f"¿Qué quieres editar?"
+    )
+    await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
+    return CONFIG_FIELD
+
+
+async def config_field(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+
+    if query.data == "cfg_cancel":
+        await query.edit_message_text("Cancelado.")
+        return ConversationHandler.END
+
+    field = query.data.replace("cfg_", "")
+    if field not in CONFIG_FIELDS:
+        return ConversationHandler.END
+
+    context.user_data['config_field'] = field
+    _, prompt = CONFIG_FIELDS[field]
+    await query.edit_message_text(f"*Editar {field}*\n\n{prompt}", parse_mode="Markdown")
+    return CONFIG_VALUE
+
+
+async def config_value(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    field = context.user_data.get('config_field')
+    if not field or field not in CONFIG_FIELDS:
+        return ConversationHandler.END
+
+    db_field, _ = CONFIG_FIELDS[field]
+    value = update.message.text.strip()
+
+    if field == 'sueldo':
+        try:
+            value = int(value.replace('.', '').replace(',', ''))
+        except ValueError:
+            await update.message.reply_text("Introduce un número válido:")
+            return CONFIG_VALUE
+
+    user = _get_user(update)
+    update_user_config(user['id'], **{db_field: value})
+    await update.message.reply_text(
+        f"✅ *{field.capitalize()}* actualizado.\n\nUsa /config para seguir editando o /start para volver al menú.",
+        parse_mode="Markdown"
+    )
+    return ConversationHandler.END
+
+
+async def config_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("Cancelado.")
+    return ConversationHandler.END
+
+
 # --- /pendientes ---
 
 async def pendientes_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -199,7 +278,8 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "/start - Menu principal\n"
             "/pendientes - Ver ofertas\n"
             "/stats - Estadisticas\n"
-            "/setup - Configurar cuenta",
+            "/config - Editar sueldo, stack, ubicacion\n"
+            "/setup - Registro inicial",
             parse_mode="Markdown"
         )
 
@@ -222,7 +302,17 @@ def start_bot(token):
         fallbacks=[CommandHandler("cancel", setup_cancel)]
     )
 
+    config_conv = ConversationHandler(
+        entry_points=[CommandHandler("config", config_start)],
+        states={
+            CONFIG_FIELD: [CallbackQueryHandler(config_field, pattern="^cfg_")],
+            CONFIG_VALUE: [MessageHandler(filters.TEXT & ~filters.COMMAND, config_value)],
+        },
+        fallbacks=[CommandHandler("cancel", config_cancel)]
+    )
+
     application.add_handler(setup_conv)
+    application.add_handler(config_conv)
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("pendientes", pendientes_cmd))
     application.add_handler(CommandHandler("stats", stats_cmd))
