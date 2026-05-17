@@ -64,6 +64,32 @@ def _get_body(msg) -> tuple[str, str]:
     return plain, html
 
 
+def _extract_job_url(html: str, plain: str) -> str:
+    """Extrae la URL del puesto de trabajo del cuerpo del email."""
+    # Buscar en HTML primero: links a linkedin.com/jobs/view/
+    if html:
+        soup = BeautifulSoup(html, 'html.parser')
+        for a in soup.find_all('a', href=True):
+            href = a['href']
+            # URL directa de oferta
+            match = re.search(r'https?://[^\s"\']*linkedin\.com/jobs/view/\d+', href)
+            if match:
+                return match.group(0).split('?')[0]
+        # URL de tracking que redirige a jobs (ej. email.linkedin.com)
+        for a in soup.find_all('a', href=True):
+            href = a['href']
+            if 'linkedin.com' in href and ('jobs' in href or 'apply' in href):
+                return href.split('?')[0]
+
+    # Fallback: buscar en texto plano
+    if plain:
+        match = re.search(r'https?://[^\s]*linkedin\.com/jobs/view/\d+', plain)
+        if match:
+            return match.group(0).split('?')[0]
+
+    return ''
+
+
 def _extract_jobs_from_html(html: str) -> List[Dict]:
     """Extrae títulos y URLs de ofertas del HTML del email de LinkedIn."""
     soup = BeautifulSoup(html, 'html.parser')
@@ -216,13 +242,24 @@ def fetch_linkedin_alerts(user_config: Dict) -> List[Dict]:
                 if not any(kw in titulo.lower() for kw in JOB_KEYWORDS):
                     continue
 
+                # Fetch del body completo para extraer URL del puesto
+                url = ''
+                try:
+                    status2, full_data = mail.fetch(email_id, "(RFC822)")
+                    if status2 == 'OK' and full_data and full_data[0]:
+                        full_msg = email.message_from_bytes(full_data[0][1])
+                        plain_body, html_body = _get_body(full_msg)
+                        url = _extract_job_url(html_body, plain_body)
+                except Exception:
+                    pass
+
                 offer_id = hashlib.md5(f"linkedin_{titulo}_{empresa}".encode()).hexdigest()[:12]
 
                 ofertas.append({
                     'id': offer_id,
                     'titulo': titulo[:120],
                     'empresa': empresa[:100],
-                    'url': '',
+                    'url': url,
                     'descripcion': subject,
                     'fuente': 'linkedin',
                     'fecha_publicacion': fecha,
