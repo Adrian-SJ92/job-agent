@@ -16,6 +16,7 @@ from job_agent.cv_generator import generate_adapted_cv
 SETUP_USERNAME, SETUP_SUELDO, SETUP_STACK, SETUP_UBICACION, SETUP_EMAIL = range(5)
 CONFIG_FIELD, CONFIG_VALUE = range(5, 7)
 UPLOAD_WAIT_DOC, UPLOAD_CONFIRM = range(7, 9)
+CONFIG_CV_WAIT = 9
 
 CV_DIR = "cv"
 _ALLOWED_EXTENSIONS = {'.pdf', '.docx'}
@@ -158,7 +159,9 @@ async def config_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("Usa /setup para registrarte primero.")
         return ConversationHandler.END
 
+    cv_status = "✓ subido" if _cv_base_exists() else "no subido"
     keyboard = [[InlineKeyboardButton(f.capitalize(), callback_data=f"cfg_{f}")] for f in CONFIG_FIELDS]
+    keyboard.append([InlineKeyboardButton(f"CV ({cv_status})", callback_data="cfg_cv")])
     keyboard.append([InlineKeyboardButton("Cancelar", callback_data="cfg_cancel")])
 
     text = (
@@ -166,7 +169,8 @@ async def config_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"💰 Sueldo mín: {user['sueldo_min']}€\n"
         f"🛠 Stack: {user['stack']}\n"
         f"📍 Ubicación: {user['ubicacion']}\n"
-        f"📧 Email: {user['email'] or '—'}\n\n"
+        f"📧 Email: {user['email'] or '—'}\n"
+        f"📄 CV: {cv_status}\n\n"
         f"¿Qué quieres editar?"
     )
     await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
@@ -180,6 +184,10 @@ async def config_field(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if query.data == "cfg_cancel":
         await query.edit_message_text("Cancelado.")
         return ConversationHandler.END
+
+    if query.data == "cfg_cv":
+        await query.edit_message_text("Envía tu nuevo CV como archivo adjunto (PDF o DOCX).")
+        return CONFIG_CV_WAIT
 
     field = query.data.replace("cfg_", "")
     if field not in CONFIG_FIELDS:
@@ -210,6 +218,28 @@ async def config_value(update: Update, context: ContextTypes.DEFAULT_TYPE):
     update_user_config(user['id'], **{db_field: value})
     await update.message.reply_text(
         f"✅ *{field.capitalize()}* actualizado.\n\nUsa /config para seguir editando o /start para volver al menú.",
+        parse_mode="Markdown"
+    )
+    return ConversationHandler.END
+
+
+async def config_cv_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    doc = update.message.document
+    if not doc:
+        await update.message.reply_text("Por favor envía el archivo adjunto directamente.")
+        return CONFIG_CV_WAIT
+
+    ext = Path(doc.file_name or '').suffix.lower()
+    if ext not in _ALLOWED_EXTENSIONS:
+        await update.message.reply_text("Solo PDF o DOCX. Envía el archivo correcto.")
+        return CONFIG_CV_WAIT
+
+    Path(CV_DIR).mkdir(exist_ok=True)
+    save_path = Path(CV_DIR) / f"cv_base{ext}"
+    tg_file = await context.bot.get_file(doc.file_id)
+    await tg_file.download_to_drive(str(save_path))
+    await update.message.reply_text(
+        f"CV actualizado correctamente (`cv_base{ext}`).\n\nUsa /config para seguir editando.",
         parse_mode="Markdown"
     )
     return ConversationHandler.END
@@ -433,8 +463,9 @@ def start_bot(token, user_config=None):
     config_conv = ConversationHandler(
         entry_points=[CommandHandler("config", config_start)],
         states={
-            CONFIG_FIELD: [CallbackQueryHandler(config_field, pattern="^cfg_")],
-            CONFIG_VALUE: [MessageHandler(filters.TEXT & ~filters.COMMAND, config_value)],
+            CONFIG_FIELD:   [CallbackQueryHandler(config_field, pattern="^cfg_")],
+            CONFIG_VALUE:   [MessageHandler(filters.TEXT & ~filters.COMMAND, config_value)],
+            CONFIG_CV_WAIT: [MessageHandler(filters.Document.ALL, config_cv_document)],
         },
         fallbacks=[CommandHandler("cancel", config_cancel)],
         per_message=False,
