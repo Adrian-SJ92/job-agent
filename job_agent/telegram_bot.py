@@ -1,4 +1,5 @@
 ﻿import argparse
+from pathlib import Path
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     Application, CommandHandler, CallbackQueryHandler,
@@ -14,6 +15,10 @@ from job_agent.cv_generator import generate_adapted_cv
 # ConversationHandler states
 SETUP_USERNAME, SETUP_SUELDO, SETUP_STACK, SETUP_UBICACION, SETUP_EMAIL = range(5)
 CONFIG_FIELD, CONFIG_VALUE = range(5, 7)
+UPLOAD_WAIT_DOC, UPLOAD_CONFIRM = range(7, 9)
+
+CV_DIR = "cv"
+_ALLOWED_EXTENSIONS = {'.pdf', '.docx'}
 
 
 def _get_user(update: Update):
@@ -226,7 +231,13 @@ async def pendientes_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(text, parse_mode="Markdown")
 
 
+def _cv_base_exists():
+    return any((Path(CV_DIR) / name).exists() for name in ('cv_base.pdf', 'cv_base.docx'))
+
+
 def _pendientes_text(user_id):
+    if not _cv_base_exists():
+        return "Primero sube tu CV con /upload\\_cv"
     ofertas = get_user_ofertas(user_id, estado='pendiente', limit=5)
     if not ofertas:
         return "Sin ofertas pendientes"
@@ -234,6 +245,67 @@ def _pendientes_text(user_id):
     for o in ofertas:
         text += f"*{o['titulo']}* ({o['score']}/10)\n{o['empresa']}\n{o['url']}\n/cv {o['id']}\n\n"
     return text
+
+
+# --- /upload_cv ---
+
+async def upload_cv_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = _get_user(update)
+    if not user:
+        await update.message.reply_text("Usa /setup para registrarte primero.")
+        return ConversationHandler.END
+    await update.message.reply_text("Envia tu CV como archivo adjunto (PDF o DOCX).")
+    return UPLOAD_WAIT_DOC
+
+
+async def upload_cv_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    doc = update.message.document
+    if not doc:
+        await update.message.reply_text("Por favor envia el archivo adjunto directamente.")
+        return UPLOAD_WAIT_DOC
+
+    ext = Path(doc.file_name or '').suffix.lower()
+    if ext not in _ALLOWED_EXTENSIONS:
+        await update.message.reply_text("Solo PDF o DOCX. Envia el archivo correcto.")
+        return UPLOAD_WAIT_DOC
+
+    context.user_data['cv_upload_file_id'] = doc.file_id
+    context.user_data['cv_upload_ext'] = ext
+
+    existing = next((p for p in ('cv_base.pdf', 'cv_base.docx')
+                     if (Path(CV_DIR) / p).exists()), None)
+    if existing:
+        await update.message.reply_text(
+            f"Ya existe un CV guardado ({existing}). Sobrescribir? (si / no)"
+        )
+        return UPLOAD_CONFIRM
+
+    await _save_cv(update, context)
+    return ConversationHandler.END
+
+
+async def upload_cv_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    respuesta = update.message.text.strip().lower()
+    if respuesta in ('si', 'sí', 's', 'yes', 'y'):
+        await _save_cv(update, context)
+    else:
+        await update.message.reply_text("Cancelado. Tu CV anterior no ha sido modificado.")
+    return ConversationHandler.END
+
+
+async def _save_cv(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    file_id = context.user_data.get('cv_upload_file_id')
+    ext = context.user_data.get('cv_upload_ext')
+    Path(CV_DIR).mkdir(exist_ok=True)
+    save_path = Path(CV_DIR) / f"cv_base{ext}"
+    tg_file = await context.bot.get_file(file_id)
+    await tg_file.download_to_drive(str(save_path))
+    await update.message.reply_text(f"CV guardado correctamente como `cv_base{ext}`.", parse_mode="Markdown")
+
+
+async def upload_cv_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("Cancelado.")
+    return ConversationHandler.END
 
 
 # --- /cv ---
@@ -323,6 +395,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "/start - Menu principal\n"
             "/pendientes - Ver ofertas\n"
             "/cv [id] - Generar CV adaptado a la oferta\n"
+            "/upload\\_cv - Subir tu CV base (PDF o DOCX)\n"
             "/stats - Estadisticas\n"
             "/config - Editar sueldo, stack, ubicacion\n"
             "/setup - Registro inicial",
@@ -359,8 +432,19 @@ def start_bot(token, user_config=None):
         per_message=False,
     )
 
+    upload_cv_conv = ConversationHandler(
+        entry_points=[CommandHandler("upload_cv", upload_cv_start)],
+        states={
+            UPLOAD_WAIT_DOC: [MessageHandler(filters.Document.ALL, upload_cv_document)],
+            UPLOAD_CONFIRM:  [MessageHandler(filters.TEXT & ~filters.COMMAND, upload_cv_confirm)],
+        },
+        fallbacks=[CommandHandler("cancel", upload_cv_cancel)],
+        per_message=False,
+    )
+
     application.add_handler(setup_conv)
     application.add_handler(config_conv)
+    application.add_handler(upload_cv_conv)
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("pendientes", pendientes_cmd))
     application.add_handler(CommandHandler("stats", stats_cmd))
