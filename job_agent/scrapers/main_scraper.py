@@ -55,8 +55,16 @@ def run_scraper_for_user(username: str):
     buenas = 0
     nuevas_para_notificar = []
 
+    # Mapear claves BD (minúsculas) → claves classifier (mayúsculas)
+    user_config = {
+        'SUELDO_MIN': str(user['sueldo_min']),
+        'STACK': user['stack'],
+        'UBICACION': user['ubicacion'],
+        'ANTHROPIC_API_KEY': os.getenv('ANTHROPIC_API_KEY'),
+    }
+
     for oferta in ofertas:
-        resultado = classify_oferta(oferta)
+        resultado = classify_oferta(oferta, user_config)
 
         score = resultado.get('score', 0)
         motivo = resultado.get('motivo', '')

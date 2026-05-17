@@ -22,8 +22,10 @@ def _normalize(text: str) -> str:
 
 
 def _build_rss_url(user_config: Dict) -> str:
-    keyword = user_config.get('stack', 'React').split(',')[0].strip()
-    ciudad = _normalize(user_config.get('ubicacion', 'Málaga').split(',')[0].split()[0])
+    stack = user_config.get('stack') or user_config.get('STACK', 'React')
+    ubicacion = user_config.get('ubicacion') or user_config.get('UBICACION', 'Málaga')
+    keyword = stack.split(',')[0].strip()
+    ciudad = _normalize(ubicacion.split(',')[0].split()[0])
     return f"{RSS_URL}?q={keyword}&city={ciudad}"
 
 
