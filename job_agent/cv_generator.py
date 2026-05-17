@@ -123,29 +123,77 @@ def _replace_paragraph_text(para, new_text):
         run.font.color.rgb = first_run_style['color']
 
 
+def _get_xml_paragraphs(doc):
+    """
+    Extrae TODOS los parrafos del DOCX incluyendo los dentro de text boxes y shapes
+    (contenido tipico de CVs exportados desde Canva/Google Slides/etc).
+    Retorna lista de (indice, texto, elemento_xml).
+    """
+    from docx.oxml.ns import qn
+    all_para_elems = doc.element.body.findall('.//' + qn('w:p'))
+    result = []
+    for i, elem in enumerate(all_para_elems):
+        text = ''.join(t.text or '' for t in elem.findall('.//' + qn('w:t')))
+        if text.strip():
+            result.append((i, text.strip(), elem))
+    return result
+
+
+def _replace_xml_paragraph(para_elem, new_text):
+    """
+    Reemplaza el texto de un parrafo a nivel XML preservando el formato del primer run.
+    Funciona con parrafos dentro de text boxes/shapes.
+    """
+    from docx.oxml.ns import qn
+
+    runs = para_elem.findall('.//' + qn('w:r'))
+    if not runs:
+        return
+
+    # Poner el nuevo texto en el primer run
+    first_t = runs[0].find(qn('w:t'))
+    if first_t is None:
+        from lxml import etree
+        first_t = etree.SubElement(runs[0], qn('w:t'))
+    first_t.text = new_text
+    first_t.set('{http://www.w3.org/XML/1998/namespace}space', 'preserve')
+
+    # Vaciar los runs restantes
+    for run in runs[1:]:
+        for t in run.findall(qn('w:t')):
+            t.text = ''
+
+
 def _modify_docx(src_path, oferta, api_key, output_docx_path):
     """
-    Abre el DOCX original, pide a Claude que identifique que parrafos adaptar
-    (por indice), aplica los reemplazos conservando el formato, y guarda.
+    Abre el DOCX original, extrae todos los parrafos (incluyendo text boxes),
+    pide a Claude que identifique cuales adaptar por indice,
+    aplica los reemplazos conservando el formato, y guarda.
     """
     from docx import Document
 
     doc = Document(src_path)
-    all_paragraphs = [(i, p.text) for i, p in enumerate(doc.paragraphs) if p.text.strip()]
+    xml_paragraphs = _get_xml_paragraphs(doc)
 
-    print(f"[cv_generator] DOCX tiene {len(doc.paragraphs)} parrafos, {len(all_paragraphs)} no vacios")
+    from docx.oxml.ns import qn
+    total_xml = len(doc.element.body.findall('.//' + qn('w:p')))
+    print(f"[cv_generator] DOCX: {total_xml} parrafos XML totales, {len(xml_paragraphs)} no vacios")
 
-    result = _adapt_docx_with_claude(all_paragraphs, oferta, api_key)
+    # Para Claude pasamos (indice_xml, texto)
+    para_list_for_claude = [(i, text) for i, text, _ in xml_paragraphs]
+    result = _adapt_docx_with_claude(para_list_for_claude, oferta, api_key)
+
+    # Mapa de indice_xml → elem para reemplazar rapido
+    elem_map = {i: elem for i, _, elem in xml_paragraphs}
 
     replaced = 0
     for reemplazo in result.get('reemplazos', []):
         idx = reemplazo.get('indice')
         nuevo = reemplazo.get('nuevo', '').strip()
-        if idx is None or not nuevo:
+        if idx is None or not nuevo or idx not in elem_map:
             continue
-        if 0 <= idx < len(doc.paragraphs):
-            _replace_paragraph_text(doc.paragraphs[idx], nuevo)
-            replaced += 1
+        _replace_xml_paragraph(elem_map[idx], nuevo)
+        replaced += 1
 
     print(f"[cv_generator] {replaced} parrafos reemplazados en el DOCX")
     doc.save(output_docx_path)
