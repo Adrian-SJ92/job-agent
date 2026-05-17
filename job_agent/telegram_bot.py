@@ -308,7 +308,8 @@ def start_bot(token):
             CONFIG_FIELD: [CallbackQueryHandler(config_field, pattern="^cfg_")],
             CONFIG_VALUE: [MessageHandler(filters.TEXT & ~filters.COMMAND, config_value)],
         },
-        fallbacks=[CommandHandler("cancel", config_cancel)]
+        fallbacks=[CommandHandler("cancel", config_cancel)],
+        per_message=False,
     )
 
     application.add_handler(setup_conv)
