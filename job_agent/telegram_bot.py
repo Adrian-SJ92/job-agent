@@ -311,6 +311,7 @@ async def upload_cv_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # --- /cv ---
 
 async def cv_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    print(f"[/cv] recibido de chat_id={update.effective_chat.id} args={context.args}")
     user = _get_user(update)
     if not user:
         await update.message.reply_text("Usa /setup para registrarte primero.")
@@ -325,8 +326,10 @@ async def cv_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     oferta_id = context.args[0]
+    print(f"[/cv] buscando oferta id={oferta_id!r} para user_id={user['id']}")
     oferta = get_oferta_by_id(oferta_id, user['id'])
     if not oferta:
+        print(f"[/cv] oferta no encontrada: id={oferta_id!r} user_id={user['id']}")
         await update.message.reply_text(
             f"Oferta '{oferta_id}' no encontrada o no tienes acceso."
         )
@@ -336,7 +339,9 @@ async def cv_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     try:
         user_config = context.bot_data.get('user_config', {})
+        print(f"[/cv] llamando generate_adapted_cv para oferta={oferta_id!r} titulo={oferta['titulo']!r}")
         cv_path = generate_adapted_cv(oferta, user_config)
+        print(f"[/cv] CV generado en {cv_path}")
         filename = f"CV_{oferta['empresa']}_{oferta['titulo'][:30]}.pdf".replace(' ', '_')
         with open(cv_path, 'rb') as f:
             await context.bot.send_document(
@@ -346,9 +351,12 @@ async def cv_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 caption=f"CV adaptado para: *{oferta['titulo']}* en {oferta['empresa']}",
                 parse_mode="Markdown"
             )
+        print(f"[/cv] PDF enviado correctamente")
     except FileNotFoundError as e:
+        print(f"[/cv] FileNotFoundError: {e}")
         await update.message.reply_text(f"CV base no encontrado: {e}")
     except Exception as e:
+        print(f"[/cv] Exception: {type(e).__name__}: {e}")
         await update.message.reply_text(f"Error generando CV: {e}")
 
 
